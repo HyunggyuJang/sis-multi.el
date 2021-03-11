@@ -1,7 +1,7 @@
 ;;; sis-multi.el --- extended sis for multi-lanugage. -*- lexical-binding: t; -*-
 
 ;; URL: https://github.com/HyunggyuJang/sis-multi
-;; Created: March 27th, 2020
+;; Created: March 11th, 2021
 ;; Keywords: convenience
 ;; Package-Requires: ((emacs "25.1"))
 ;; Version: 1.0
@@ -27,6 +27,7 @@
 
 ;;; Code:
 (require 'subr-x)
+(eval-when-compile (require 'cl-lib))
 
 (declare-function mac-input-source "ext:macfns.c" (&optional SOURCE FORMAT) t)
 (declare-function mac-select-input-source "ext:macfns.c"
@@ -574,7 +575,6 @@ Each detector should:
   (let ((context (sis--context-guess)))
     (when context
       (sis--set context))))
-
 
 (provide 'sis-multi)
 ;;; sis-multi.el ends here
