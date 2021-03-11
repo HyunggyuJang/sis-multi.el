@@ -28,6 +28,10 @@
 ;;; Code:
 (require 'subr-x)
 
+(declare-function mac-input-source "ext:macfns.c" (&optional SOURCE FORMAT) t)
+(declare-function mac-select-input-source "ext:macfns.c"
+                  (SOURCE &optional SET-KEYBOARD-LAYOUT-OVERRIDE-P) t)
+
 (defvar sis-external-ism "macism"
   "Path of external ism.")
 
@@ -63,7 +67,7 @@ Should accept a string which is the id of the input source.")
 
 nil means obtained from the envrionment.")
 
-(defvar sis-korean-cursor-color "purple"
+(defvar sis-hangul-cursor-color "purple"
   "Cursor color for korean language.")
 
 (defvar sis-japanese-cursor-color "green"
@@ -98,12 +102,20 @@ Each trigger should be a list: (FN PRE-FN-DETECTOR POST-FN-DETECTOR).
 Input source will be switched to (or (PRE-FN-DETECTOR) (POST-FN-DETECTOR)) after
 FN is invoked.")
 
+(defvar sis--context-triggers-adviced nil "Context triggers adviced.")
+
 ;;
 ;; Following codes are mainly about input source manager
 ;;
 
 (defvar sis--ism nil "The input source manager.")
 (defvar sis--ism-inited nil "Input source manager initialized.")
+
+(defvar sis--current nil
+  "Current input source.")
+
+(defvar sis--previous nil
+  "Previous input source.")
 
 (defun sis--init-ism ()
   "Init input source manager."
@@ -184,8 +196,6 @@ SOURCE should be 'english or 'other."
 
   (setq sis--previous sis--current)
   (setq sis--current source)
-  (unless sis--for-buffer-locked
-    (setq sis--for-buffer source))
   (when (not (eq sis--previous sis--current))
     (run-hooks 'sis-change-hook)))
 
@@ -226,9 +236,6 @@ SOURCE should be 'english or 'other."
    (; japanese
     (member source (list 'japanese sis-japanese-source))
     sis-japanese-source)))
-
-;;; To select, use
-;;; (mac-select-input-source source)
 
 (defsubst sis--string-match-p (regexp str &optional start)
   "Robust wrapper of `string-match-p'.
@@ -397,10 +404,10 @@ If POSITION is not provided, then default to be the current position."
       (and (= fore-to (or position (point))) (sis--english-p fore-char))
       t)
      (; [english][blank or not][^][blank or not][not other]
-      (and (sis--english-p back-char) (sis--perhaps-other-p fore-char))
+      (and (sis--english-p back-char) (sis--perhaps-english-p fore-char))
       t)
      (; [not other][blank or not][^][blank or not][english]
-      (and (sis--perhaps-other-p back-char) (sis--english-p fore-char))
+      (and (sis--perhaps-english-p back-char) (sis--english-p fore-char))
       t)
      (; [english: to the previous line][blank][^]
       (and (or sis-context-aggressive-line
