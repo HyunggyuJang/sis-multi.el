@@ -245,6 +245,70 @@ meanings as `string-match-p'."
   (and (stringp regexp)
        (stringp str)
        (string-match-p regexp str start)))
+
+;;
+;; Following codes are mainly about cursor color mode
+;;
+
+(defun sis--set-cursor-color-advice (color)
+  "Advice for FN of `set-cursor-color' with COLOR.
+
+The advice is needed, because other packages may set cursor color in their own
+way."
+  (pcase sis--current
+    ('english
+     (list sis-default-cursor-color))
+    ('hangul
+     (list sis-hangul-cursor-color))
+    ('japanese
+     (list sis-japanese-cursor-color))
+    (_
+     color)))
+
+(defun sis--update-cursor-color()
+  "Update cursor color according to input source."
+  ;; for GUI
+  (when (display-graphic-p)
+    ;;
+    ;;actually which color passed to the function does not matter,
+    ;; the advice will take care of it.
+    (set-cursor-color sis-default-cursor-color))
+
+  ;; for TUI
+  (unless (display-graphic-p)
+    (pcase sis--current
+      ('english
+       (send-string-to-terminal
+        (format "\e]12;%s\a" sis-default-cursor-color)))
+      ('hangul
+       (send-string-to-terminal
+        (format "\e]12;%s\a" sis-hangul-cursor-color)))
+      ('japanese
+       (send-string-to-terminal
+        (format "\e]12;%s\a" sis-japanese-cursor-color))))))
+
+;;;###autoload
+(define-minor-mode sis-global-cursor-color-mode
+  "Automaticly change cursor color according to input source."
+  :global t
+  :init-value nil
+  (cond
+   (; turn on the mode
+    sis-global-cursor-color-mode
+    ;; save original cursor color
+    (unless sis-default-cursor-color
+      (setq sis-default-cursor-color
+            (or (when (display-graphic-p)
+                  (or (cdr (assq 'cursor-color default-frame-alist))
+                      (face-background 'cursor)))
+                "white")))
+    (advice-add 'set-cursor-color :filter-args #'sis--set-cursor-color-advice)
+    (add-hook 'sis-change-hook #'sis--update-cursor-color))
+   (; turn off the mode
+    (not sis-global-cursor-color-mode)
+    (advice-remove 'set-cursor-color #'sis--set-cursor-color-advice)
+    (remove-hook 'sis-change-hook #'sis--update-cursor-color))))
+
 ;;
 ;; Following codes are mainly about context-mode
 ;;
@@ -511,69 +575,6 @@ Each detector should:
     (when context
       (sis--set context))))
 
-
-;;
-;; Following codes are mainly about cursor color mode
-;;
-
-(defun sis--set-cursor-color-advice (color)
-  "Advice for FN of `set-cursor-color' with COLOR.
-
-The advice is needed, because other packages may set cursor color in their own
-way."
-  (pcase sis--current
-    ('english
-     (list sis-default-cursor-color))
-    ('hangul
-     (list sis-hangul-cursor-color))
-    ('japanese
-     (list sis-japanese-cursor-color))
-    (_
-     color)))
-
-(defun sis--update-cursor-color()
-  "Update cursor color according to input source."
-  ;; for GUI
-  (when (display-graphic-p)
-    ;;
-    ;;actually which color passed to the function does not matter,
-    ;; the advice will take care of it.
-    (set-cursor-color sis-default-cursor-color))
-
-  ;; for TUI
-  (unless (display-graphic-p)
-    (pcase sis--current
-      ('english
-       (send-string-to-terminal
-        (format "\e]12;%s\a" sis-default-cursor-color)))
-      ('hangul
-       (send-string-to-terminal
-        (format "\e]12;%s\a" sis-hangul-cursor-color)))
-      ('japanese
-       (send-string-to-terminal
-        (format "\e]12;%s\a" sis-japanese-cursor-color))))))
-
-;;;###autoload
-(define-minor-mode sis-global-cursor-color-mode
-  "Automaticly change cursor color according to input source."
-  :global t
-  :init-value nil
-  (cond
-   (; turn on the mode
-    sis-global-cursor-color-mode
-    ;; save original cursor color
-    (unless sis-default-cursor-color
-      (setq sis-default-cursor-color
-            (or (when (display-graphic-p)
-                  (or (cdr (assq 'cursor-color default-frame-alist))
-                      (face-background 'cursor)))
-                "white")))
-    (advice-add 'set-cursor-color :filter-args #'sis--set-cursor-color-advice)
-    (add-hook 'sis-change-hook #'sis--update-cursor-color))
-   (; turn off the mode
-    (not sis-global-cursor-color-mode)
-    (advice-remove 'set-cursor-color #'sis--set-cursor-color-advice)
-    (remove-hook 'sis-change-hook #'sis--update-cursor-color))))
 
 (provide 'sis-multi)
 ;;; sis-multi.el ends here
