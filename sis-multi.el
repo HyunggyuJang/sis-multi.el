@@ -240,6 +240,10 @@ SOURCE should be 'english or 'other."
    (funcall sis-do-set (sis--normalize-to-source source))
    ))
 
+(defun sis--set-english ()
+  "Function to set input source to `english'."
+  (sis--set 'english))
+
 (defsubst sis--string-match-p (regexp str &optional start)
   "Robust wrapper of `string-match-p'.
 
@@ -539,6 +543,9 @@ Each detector should:
   (sis--ensure-ism
    (dolist (hook sis-context-hooks)
      (add-hook hook #'sis-context nil t))
+
+   (when (featurep 'evil)
+    (add-hook 'evil-insert-state-exit-hook #'sis--set-english)
 
    ;; adviced for all, but only take effect when sis-context-mode is enabled
    (unless sis--context-triggers-adviced
