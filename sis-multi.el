@@ -57,9 +57,9 @@ Should accept a string which is the id of the input source.")
   "Pattern to identify a character as japanese.")
 (defvar sis-japanese-source "com.apple.inputmethod.Kotoeri.Japanese"
   "Input source for japanese lang.")
-(defvar sis-blank-pattern "[:blank:]"
+(defvar sis-blank-pattern "[:blank:][:punct:]"
   "Pattern to identify a character as blank.")
-(defvar sis-blank-pattern-extended (concat sis-blank-pattern "[:cntrl:][:punct:]")
+(defvar sis-blank-pattern-extended (concat sis-blank-pattern "[:cntrl:]")
   "Pattern to identify a character as extended blank.")
 
 (defvar sis-change-hook nil
