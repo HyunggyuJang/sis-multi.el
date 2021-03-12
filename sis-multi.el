@@ -59,6 +59,8 @@ Should accept a string which is the id of the input source.")
   "Input source for japanese lang.")
 (defvar sis-blank-pattern "[:blank:]"
   "Pattern to identify a character as blank.")
+(defvar sis-blank-pattern-extended (concat sis-blank-pattern "[:cntrl:][:punct:]")
+  "Pattern to identify a character as extended blank.")
 
 (defvar sis-change-hook nil
   "Hook to run when input source changes.")
@@ -354,7 +356,7 @@ way."
     (skip-chars-backward sis-blank-pattern)
     (let ((to (point))
           (char (char-before (point))))
-      (skip-chars-backward (concat sis-blank-pattern "[:cntrl:]"))
+      (skip-chars-backward sis-blank-pattern-extended)
       (let ((cross-line-char (char-before (point))))
         (make-sis-back-detect :to to
                               :char (when char (string char))
@@ -377,7 +379,7 @@ way."
     (skip-chars-forward sis-blank-pattern)
     (let ((to (point))
           (char (char-after (point))))
-      (skip-chars-forward (concat sis-blank-pattern "[:cntrl:]"))
+      (skip-chars-forward sis-blank-pattern-extended)
       (let ((cross-line-char (char-after (point))))
         (make-sis-fore-detect :to to
                               :char (when char (string char))
