@@ -545,7 +545,7 @@ Each detector should:
      (add-hook hook #'sis-context nil t))
 
    (when (featurep 'evil)
-    (add-hook 'evil-insert-state-exit-hook #'sis--set-english)
+    (add-hook 'evil-insert-state-exit-hook #'sis--set-english))
 
    ;; adviced for all, but only take effect when sis-context-mode is enabled
    (unless sis--context-triggers-adviced
