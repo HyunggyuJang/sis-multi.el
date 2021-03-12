@@ -49,7 +49,7 @@ Should accept a string which is the id of the input source.")
   "Pattern to identify a character as english.")
 (defvar sis-english-source "com.apple.inputmethod.Kotoeri.Roman"
   "Input source for english.")
-(defvar sis-hangul-pattern "[가-힣]"
+(defvar sis-hangul-pattern "[ㄱ-ㅎㅏ-ㅣ가-힣]"
   "Pattern to identify a character as korean.")
 (defvar sis-hangul-source "com.apple.inputmethod.Korean.2SetKorean"
   "Input source for hangul lang.")
