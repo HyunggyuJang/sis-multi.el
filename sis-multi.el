@@ -398,9 +398,6 @@ way."
 If POSITION is not provided, then default to be the current position."
   (let* ((back-to (sis-back-detect-to back-detect))
          (back-char (sis-back-detect-char back-detect))
-         (cross-line-back-to (sis-back-detect-cross-line-to back-detect))
-         (cross-line-back-char (sis-back-detect-cross-line-char back-detect))
-
          (fore-to (sis-fore-detect-to fore-detect))
          (fore-char (sis-fore-detect-char fore-detect)))
     (cond
@@ -415,12 +412,6 @@ If POSITION is not provided, then default to be the current position."
       t)
      (; [not english][blank or not][^][blank or not][hangul lang]
       (and (sis--perhaps-hangul-p back-char) (sis--hangul-p fore-char))
-      t)
-     (; [hangul lang: to the previous line][blank][^]
-      (and (or sis-context-aggressive-line
-               (> cross-line-back-to (line-beginning-position 0)))
-           (< cross-line-back-to (line-beginning-position))
-           (sis--hangul-p cross-line-back-char))
       t))))
 
 (defun sis--context-japanese-p (back-detect fore-detect &optional position)
@@ -430,9 +421,6 @@ If POSITION is not provided, then default to be the current position."
 If POSITION is not provided, then default to be the current position."
   (let* ((back-to (sis-back-detect-to back-detect))
          (back-char (sis-back-detect-char back-detect))
-         (cross-line-back-to (sis-back-detect-cross-line-to back-detect))
-         (cross-line-back-char (sis-back-detect-cross-line-char back-detect))
-
          (fore-to (sis-fore-detect-to fore-detect))
          (fore-char (sis-fore-detect-char fore-detect)))
     (cond
@@ -447,12 +435,6 @@ If POSITION is not provided, then default to be the current position."
       t)
      (; [not english][blank or not][^][blank or not][japanese lang]
       (and (sis--perhaps-japanese-p back-char) (sis--japanese-p fore-char))
-      t)
-     (; [japanese lang: to the previous line][blank][^]
-      (and (or sis-context-aggressive-line
-               (> cross-line-back-to (line-beginning-position 0)))
-           (< cross-line-back-to (line-beginning-position))
-           (sis--japanese-p cross-line-back-char))
       t))))
 
 (defun sis--context-english-p (back-detect fore-detect &optional position)
@@ -462,9 +444,6 @@ If POSITION is not provided, then default to be the current position."
 If POSITION is not provided, then default to be the current position."
   (let* ((back-to (sis-back-detect-to back-detect))
          (back-char (sis-back-detect-char back-detect))
-         (cross-line-back-to (sis-back-detect-cross-line-to back-detect))
-         (cross-line-back-char (sis-back-detect-cross-line-char back-detect))
-
          (fore-to (sis-fore-detect-to fore-detect))
          (fore-char (sis-fore-detect-char fore-detect)))
     (cond
@@ -479,13 +458,52 @@ If POSITION is not provided, then default to be the current position."
       t)
      (; [not other][blank or not][^][blank or not][english]
       (and (sis--perhaps-english-p back-char) (sis--english-p fore-char))
-      t)
-     (; [english: to the previous line][blank][^]
-      (and (or sis-context-aggressive-line
-               (> cross-line-back-to (line-beginning-position 0)))
-           (< cross-line-back-to (line-beginning-position))
-           (sis--english-p cross-line-back-char))
       t))))
+
+(defmacro sis--context-smart-line (&rest langs)
+  "Smart-line detection with LANGS."
+  `(lambda (back-detect fore-detect)
+     (let ((cross-line-back-to (sis-back-detect-cross-line-to back-detect))
+           (cross-line-back-char (sis-back-detect-cross-line-char back-detect))
+           (cross-line-fore-to (sis-fore-detect-cross-line-to fore-detect))
+           (cross-line-fore-char (sis-fore-detect-cross-line-char fore-detect)))
+       (cond
+        ((and (> cross-line-back-to (line-beginning-position 0))
+              (< cross-line-back-to (line-beginning-position)))
+         ,(cons
+           'cond
+           (mapcar
+            (lambda (lang)
+              `((,(intern (format "sis--%s-p" lang)) cross-line-back-char)
+                ',lang))
+            langs)))
+        ((and (< cross-line-fore-to (line-end-position 2))
+              (> cross-line-fore-to (line-end-position)))
+         ,(cons
+           'cond
+           (mapcar
+            (lambda (lang)
+              `((,(intern (format "sis--%s-p" lang)) cross-line-fore-char)
+                ',lang))
+            langs)))
+        ((and sis-context-aggressive-line
+              (< cross-line-back-to (line-beginning-position)))
+         ,(cons
+           'cond
+           (mapcar
+            (lambda (lang)
+              `((,(intern (format "sis--%s-p" lang)) cross-line-back-char)
+                ',lang))
+            langs)))
+        ((and sis-context-aggressive-line
+              (> cross-line-fore-to (line-end-position)))
+         ,(cons
+           'cond
+           (mapcar
+            (lambda (lang)
+              `((,(intern (format "sis--%s-p" lang)) cross-line-fore-char)
+                ',lang))
+            langs)))))))
 
 (defun sis--context-line ()
   "Line context."
@@ -510,7 +528,8 @@ If POSITION is not provided, then default to be the current position."
             'hangul))
         (lambda (back-detect fore-detect)
           (when (sis--context-japanese-p back-detect fore-detect)
-            'japanese)))
+            'japanese))
+        (sis--context-smart-line english hangul japanese))
 
   "Detectors to detect the context.
 
