@@ -47,7 +47,7 @@ Should return a string which is the id of the input source.")
 Should accept a string which is the id of the input source.")
 (defvar sis-english-pattern "[a-zA-Z]"
   "Pattern to identify a character as english.")
-(defvar sis-english-source "com.apple.inputmethod.Kotoeri.Roman"
+(defvar sis-english-source "org.sil.ukelele.keyboardlayout..u.s.copy"
   "Input source for english.")
 (defvar sis-hangul-pattern "[ㄱ-ㅎㅏ-ㅣ가-힣]"
   "Pattern to identify a character as korean.")
