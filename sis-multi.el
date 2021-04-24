@@ -26,55 +26,25 @@
 ;; method) for multi-linguistic environment.
 
 ;;; Code:
-(require 'subr-x)
 (eval-when-compile (require 'cl-lib))
+(require 'mule)
 
-(declare-function mac-input-source "ext:macfns.c" (&optional SOURCE FORMAT) t)
-(declare-function mac-select-input-source "ext:macfns.c"
-                  (SOURCE &optional SET-KEYBOARD-LAYOUT-OVERRIDE-P) t)
-
-(defvar sis-external-ism "macism"
-  "Path of external ism.")
-
-(defvar sis-do-get nil
-  "Function to get the current input source.
-
-Should return a string which is the id of the input source.")
-
-(defvar sis-do-set nil
-  "Function to set the input source.
-
-Should accept a string which is the id of the input source.")
 (defvar sis-english-pattern "[a-zA-Z]"
   "Pattern to identify a character as english.")
-(defvar sis-english-source 'ascii-capable-keyboard
+(defvar sis-english-source 'en
   "Input source for english.")
 (defvar sis-hangul-pattern "[ㄱ-ㅎㅏ-ㅣ가-힣]"
   "Pattern to identify a character as korean.")
-(defvar sis-hangul-source "ko"
+(defvar sis-hangul-source "korean-hangul"
   "Input source for hangul lang.")
 (defvar sis-japanese-pattern "\\cj"
   "Pattern to identify a character as japanese.")
-(defvar sis-japanese-source "ja"
+(defvar sis-japanese-source "japanese"
   "Input source for japanese lang.")
 (defvar sis-blank-pattern "[:blank:][:punct:][:digit:]"
   "Pattern to identify a character as blank.")
 (defvar sis-blank-pattern-extended (concat sis-blank-pattern "[:cntrl:]")
   "Pattern to identify a character as extended blank.")
-
-(defvar sis-change-hook nil
-  "Hook to run when input source changes.")
-
-(defvar sis-default-cursor-color nil
-  "Default cursor color, used for English.
-
-nil means obtained from the envrionment.")
-
-(defvar sis-hangul-cursor-color "purple"
-  "Cursor color for korean language.")
-
-(defvar sis-japanese-cursor-color "green"
-  "Cursor color for japanese language.")
 
 (defvar sis-context-aggressive-line t
   "Aggressively detect context across blank lines.")
@@ -111,138 +81,11 @@ FN is invoked.")
 ;; Following codes are mainly about input source manager
 ;;
 
-(defvar sis--ism nil "The input source manager.")
-(defvar sis--ism-inited nil "Input source manager initialized.")
-
-(defvar sis--current nil
-  "Current input source.")
-
-(defvar sis--previous nil
-  "Previous input source.")
-
-(defun sis--init-ism ()
-  "Init input source manager."
-  ;; `sis-do-get'and `sis-do-set' takes the first precedence.
-
-  ;; external ism
-  (when (stringp sis-external-ism)
-    (let ((ism-path (executable-find sis-external-ism)))
-      (when ism-path (setq sis--ism ism-path))))
-
-  ;; try EMP when do-get or do-set is missing
-  (unless (and (functionp sis-do-get)
-               (functionp sis-do-set))
-    (when (and (string= (window-system) "mac")
-               (fboundp 'mac-input-source))
-      ;; EMP
-      (setq sis--ism 'emp)))
-
-  ;; make `sis-do-set' and `sis-do-get'
-  (when sis--ism
-    ;; avoid override user customized sis-do-get
-    (unless (functionp sis-do-get)
-      (setq sis-do-get (sis--mk-get-fn)))
-    ;; avoid override user customized sis-do-set
-    (unless (functionp sis-do-set)
-      (setq sis-do-set (sis--mk-set-fn))))
-
-  ;; successfully inited
-  (when (and (functionp sis-do-get)
-             (functionp sis-do-set))
-    ;; a t `sis--ism' means customized by `sis-do-get' and `sis-do-set'
-    (unless sis--ism (setq sis--ism t)))
-
-  ;; just inited, successfully or not
-  (setq sis--ism-inited t))
-
-(defmacro sis--ensure-ism (&rest body)
-  "Only run BODY with valid ism."
-  `(progn
-     (unless sis--ism-inited
-       (sis--init-ism))
-     (when sis--ism
-       ,@body)))
-
-(defmacro sis--ensure-dir (&rest body)
-  "Ensure BODY run in home directory."
-  `(let ((default-directory "~"))
-     ,@body))
-
-(defun sis--mk-get-fn ()
-  "Make a function to be bound to `sis-do-get'."
-  (cond
-   (; EMP
-    (equal sis--ism 'emp)
-    #'mac-input-source)
-   (; external ism
-    sis--ism
-    (lambda ()
-      (sis--ensure-dir
-       (string-trim (shell-command-to-string sis--ism)))))))
-
-(defun sis--mk-set-fn ()
-  "Make a function to be bound to `sis-do-set'."
-  (cond
-   (; EMP
-    (equal sis--ism 'emp)
-    (lambda (source) (mac-select-input-source source)))
-   (; external ism
-    sis--ism
-    (lambda (source)
-      (sis--ensure-dir
-       (start-process "set-input-source" nil sis--ism source))))))
-
-(defun sis--update-state (source)
-  "Update input source state.
-
-SOURCE should be 'english or 'other."
-
-  (setq sis--previous sis--current)
-  (setq sis--current source)
-  (when (not (eq sis--previous sis--current))
-    (run-hooks 'sis-change-hook)))
-
-(defsubst sis--normalize-to-lang (lang)
-  "Normalize LANG in the form of source id or lang to lang."
-  (cond
-   (; english
-    (member lang (list 'english sis-english-source))
-    'english)
-   (; hangul
-    (member lang (list 'hangul sis-hangul-source))
-    'hangul)
-   (; japanese
-    (member lang (list 'japanese sis-japanese-source))
-    'japanese)))
-
-(defsubst sis--normalize-to-source (source)
-  "Normalize SOURCE in the form of source id or lang to source."
-  (cond
-   (; english
-    (member source (list 'english sis-english-source))
-    sis-english-source)
-   (; hangul
-    (member source (list 'hangul sis-hangul-source))
-    sis-hangul-source)
-   (; japanese
-    (member source (list 'japanese sis-japanese-source))
-    sis-japanese-source)))
-
-(defsubst sis--get ()
-  "Get the input source id."
-  (sis--ensure-ism
-   (sis--update-state (sis--normalize-to-lang (funcall sis-do-get)))))
-
 (defsubst sis--set (source)
   "Set the input source according to source SOURCE."
-  (sis--ensure-ism
-   (sis--update-state (sis--normalize-to-lang source))
-   (funcall sis-do-set (sis--normalize-to-source source))
-   ))
-
-(defun sis--set-english ()
-  "Function to set input source to `english'."
-  (sis--set 'english))
+  (if (eq source 'en)
+      (deactivate-input-method)
+    (activate-input-method source)))
 
 (defsubst sis--string-match-p (regexp str &optional start)
   "Robust wrapper of `string-match-p'.
@@ -254,69 +97,6 @@ meanings as `string-match-p'."
        (string-match-p regexp str start)))
 
 ;;
-;; Following codes are mainly about cursor color mode
-;;
-
-(defun sis--set-cursor-color-advice (color)
-  "Advice for FN of `set-cursor-color' with COLOR.
-
-The advice is needed, because other packages may set cursor color in their own
-way."
-  (pcase sis--current
-    ('english
-     (list sis-default-cursor-color))
-    ('hangul
-     (list sis-hangul-cursor-color))
-    ('japanese
-     (list sis-japanese-cursor-color))
-    (_
-     color)))
-
-(defun sis--update-cursor-color()
-  "Update cursor color according to input source."
-  ;; for GUI
-  (when (display-graphic-p)
-    ;;
-    ;;actually which color passed to the function does not matter,
-    ;; the advice will take care of it.
-    (set-cursor-color sis-default-cursor-color))
-
-  ;; for TUI
-  (unless (display-graphic-p)
-    (pcase sis--current
-      ('english
-       (send-string-to-terminal
-        (format "\e]12;%s\a" sis-default-cursor-color)))
-      ('hangul
-       (send-string-to-terminal
-        (format "\e]12;%s\a" sis-hangul-cursor-color)))
-      ('japanese
-       (send-string-to-terminal
-        (format "\e]12;%s\a" sis-japanese-cursor-color))))))
-
-;;;###autoload
-(define-minor-mode sis-global-cursor-color-mode
-  "Automaticly change cursor color according to input source."
-  :global t
-  :init-value nil
-  (cond
-   (; turn on the mode
-    sis-global-cursor-color-mode
-    ;; save original cursor color
-    (unless sis-default-cursor-color
-      (setq sis-default-cursor-color
-            (or (when (display-graphic-p)
-                  (or (cdr (assq 'cursor-color default-frame-alist))
-                      (face-background 'cursor)))
-                "white")))
-    (advice-add 'set-cursor-color :filter-args #'sis--set-cursor-color-advice)
-    (add-hook 'sis-change-hook #'sis--update-cursor-color))
-   (; turn off the mode
-    (not sis-global-cursor-color-mode)
-    (advice-remove 'set-cursor-color #'sis--set-cursor-color-advice)
-    (remove-hook 'sis-change-hook #'sis--update-cursor-color))))
-
-;;
 ;; Following codes are mainly about context-mode
 ;;
 
@@ -326,7 +106,7 @@ way."
 
 (defsubst sis--perhaps-english-p (str)
   "Predicate on STR is has no English characters."
-  (not (sis--string-match-p (string-join (list sis-hangul-pattern sis-japanese-pattern) "\\|") str)))
+  (not (sis--string-match-p (mapconcat #'identity (list sis-hangul-pattern sis-japanese-pattern) "\\|") str)))
 
 (defsubst sis--hangul-p (str)
   "Predicate on STR has /hangul/ language characters."
@@ -334,7 +114,7 @@ way."
 
 (defsubst sis--perhaps-hangul-p (str)
   "Predicate on STR is has no Hangul characters."
-  (not (sis--string-match-p (string-join (list sis-english-pattern sis-japanese-pattern) "\\|") str)))
+  (not (sis--string-match-p (mapconcat #'identity (list sis-english-pattern sis-japanese-pattern) "\\|") str)))
 
 (defsubst sis--japanese-p (str)
   "Predicate on STR has /japanese/ language characters."
@@ -342,7 +122,7 @@ way."
 
 (defsubst sis--perhaps-japanese-p (str)
   "Predicate on STR is has no Japanese characters."
-  (not (sis--string-match-p (string-join (list sis-english-pattern sis-hangul-pattern) "\\|") str)))
+  (not (sis--string-match-p (mapconcat #'identity (list sis-english-pattern sis-hangul-pattern) "\\|") str)))
 
 (cl-defstruct sis-back-detect ; result of backward detect
   to ; point after first non-blank char in the same line
@@ -462,48 +242,31 @@ If POSITION is not provided, then default to be the current position."
 
 (defmacro sis--context-smart-line (&rest langs)
   "Smart-line detection with LANGS."
-  `(lambda (back-detect fore-detect)
-     (let ((cross-line-back-to (sis-back-detect-cross-line-to back-detect))
-           (cross-line-back-char (sis-back-detect-cross-line-char back-detect))
-           (cross-line-fore-to (sis-fore-detect-cross-line-to fore-detect))
-           (cross-line-fore-char (sis-fore-detect-cross-line-char fore-detect)))
-       (cond
-        ((and (> cross-line-back-to (line-beginning-position 0))
-              (< cross-line-back-to (line-beginning-position)))
-         ,(cons
-           'cond
-           (mapcar
-            (lambda (lang)
-              `((,(intern (format "sis--%s-p" lang)) cross-line-back-char)
-                ',lang))
-            langs)))
-        ((and (< cross-line-fore-to (line-end-position 2))
-              (> cross-line-fore-to (line-end-position)))
-         ,(cons
-           'cond
-           (mapcar
-            (lambda (lang)
-              `((,(intern (format "sis--%s-p" lang)) cross-line-fore-char)
-                ',lang))
-            langs)))
-        ((and sis-context-aggressive-line
-              (< cross-line-back-to (line-beginning-position)))
-         ,(cons
-           'cond
-           (mapcar
-            (lambda (lang)
-              `((,(intern (format "sis--%s-p" lang)) cross-line-back-char)
-                ',lang))
-            langs)))
-        ((and sis-context-aggressive-line
-              (> cross-line-fore-to (line-end-position)))
-         ,(cons
-           'cond
-           (mapcar
-            (lambda (lang)
-              `((,(intern (format "sis--%s-p" lang)) cross-line-fore-char)
-                ',lang))
-            langs)))))))
+  (cl-flet ((detect-based-on-char (char)
+                                  (cons 'cond
+                                        (mapcar
+                                         (lambda (lang)
+                                           `((,(intern (format "sis--%s-p" lang)) ,char)
+                                             ,(intern (format "sis-%s-source" lang))))
+                                         langs))))
+    `(lambda (back-detect fore-detect)
+       (let ((cross-line-back-to (sis-back-detect-cross-line-to back-detect))
+             (cross-line-back-char (sis-back-detect-cross-line-char back-detect))
+             (cross-line-fore-to (sis-fore-detect-cross-line-to fore-detect))
+             (cross-line-fore-char (sis-fore-detect-cross-line-char fore-detect)))
+         (cond
+          ((and (> cross-line-back-to (line-beginning-position 0))
+                (< cross-line-back-to (line-beginning-position)))
+           ,(detect-based-on-char 'cross-line-back-char))
+          ((and (< cross-line-fore-to (line-end-position 2))
+                (> cross-line-fore-to (line-end-position)))
+           ,(detect-based-on-char 'cross-line-fore-char))
+          ((and sis-context-aggressive-line
+                (< cross-line-back-to (line-beginning-position)))
+           ,(detect-based-on-char 'cross-line-back-char))
+          ((and sis-context-aggressive-line
+                (> cross-line-fore-to (line-end-position)))
+           ,(detect-based-on-char 'cross-line-fore-char)))))))
 
 (defun sis--context-line ()
   "Line context."
@@ -511,24 +274,24 @@ If POSITION is not provided, then default to be the current position."
     (cond
      (; has /hangul/ lang char
       (sis--hangul-p line)
-      'hangul)
+      sis-hangul-source)
      (; has /japanese/ lang char
       (sis--japanese-p line)
-      'japanese)
+      sis-japanese-source)
      (; has no /other/ lang char
       (sis--english-p line)
-      'english))))
+      sis-english-source))))
 
 (defvar sis-context-detectors
   (list (lambda (back-detect fore-detect)
           (when (sis--context-english-p back-detect fore-detect)
-            'english))
+            sis-english-source))
         (lambda (back-detect fore-detect)
           (when (sis--context-hangul-p back-detect fore-detect)
-            'hangul))
+            sis-hangul-source))
         (lambda (back-detect fore-detect)
           (when (sis--context-japanese-p back-detect fore-detect)
-            'japanese))
+            sis-japanese-source))
         (sis--context-smart-line english hangul japanese))
 
   "Detectors to detect the context.
@@ -554,17 +317,21 @@ Each detector should:
 
     context))
 
+(defun sis--change-input-method-advice (orig-fn &rest args)
+  "Suppress transient functions to be run by deactivation method.
+ORIG-FN assumed to be `activate-input-method', and ARGS is its arguments."
+  (let (input-method-deactivate-hook)
+    (apply orig-fn args)))
+
 ;;;###autoload
 (define-minor-mode sis-context-mode
   "Switch input source smartly according to context."
   :init-value nil
 
-  (sis--ensure-ism
-   (dolist (hook sis-context-hooks)
-     (add-hook hook #'sis-context nil t))
+  (dolist (hook sis-context-hooks)
+    (add-hook hook #'sis-context nil t))
 
-   (when (featurep 'evil)
-    (add-hook 'evil-insert-state-exit-hook #'sis--set-english))
+  (advice-add 'activate-input-method :around #'sis--change-input-method-advice)
 
    ;; adviced for all, but only take effect when sis-context-mode is enabled
    (unless sis--context-triggers-adviced
@@ -589,7 +356,7 @@ Each detector should:
                 (apply fn args))))
          ;; Add special property to the advice, so it can be easily removed
          (put (intern advice-name) 'sis--context-trigger-advice t)
-         (advice-add (eval trigger-fn) :around (intern advice-name)))))))
+         (advice-add (eval trigger-fn) :around (intern advice-name))))))
 
 ;;;###autoload
 (define-globalized-minor-mode
