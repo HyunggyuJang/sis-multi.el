@@ -39,7 +39,7 @@
   "Input source for hangul lang.")
 (defvar sis-japanese-pattern "\\cj"
   "Pattern to identify a character as japanese.")
-(defvar sis-japanese-source "japanese"
+(defvar sis-japanese-source "japanese-skk"
   "Input source for japanese lang.")
 (defvar sis-blank-pattern "[:blank:][:punct:][:digit:]"
   "Pattern to identify a character as blank.")
